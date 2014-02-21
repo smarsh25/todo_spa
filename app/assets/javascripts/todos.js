@@ -1,165 +1,73 @@
+
+// wait for document.ready or window.onload
 $(function(){
 
-    var todos = [];
+  // grab our form by id = "addTodo"
+  //  listen for a submit event
+  //  handle with a callback, that takes the event
+  $('#addTodo').on('submit', function(event) {
+    // begin callback, prevent from submission
+    event.preventDefault();
+    console.log("to do form was added!", event);
 
-    var App = {};
-   
-    App.setTemplate = function(name){
-        this.templateName = name;
-        this.template = HandlebarsTemplates[this.templateName];
-       
-        return this;
-    };
+    var newTodo = {completed: false};
+    newTodo.title = $("#todo_title").val();
+    console.log(newTodo);
 
-    App.setTarget = function(sel){
-        this.target =  sel;
-        this.$target = $(sel);
-        return this;
-    };
-    
-    
-    App.make = function(item){
-        this.$el = $(this.template(item));
-        return this;
-    };
-    
-    App.append = function(){
-        this.$target.append(this.$el);
-        return this;
-    };
+    // var data = {todo: newTodo};
+    // $.ajax({url: 'todos/.json',
+    //         type: 'post',
+    //         data: data,
+    //       }).done();
 
-    App.use = function(targetSel, templateSel){
-        return this.setTarget(targetSel).setTemplate(templateSel);
-     };
-    App.render = function(item){
-      this.make(item).append();
-      return this;
-    };
-    
-    App.doThis = function(fn){
-        fn.apply(App);
-        return this;
-     };
-
-    App.urls = {
-      index : { path : '/todos.json', method : 'get' },
-      create : { path : '/todos.json', method : 'post' },
-
-      // An id must be added to the todos path
-      update : { path : '/todos/', method : 'patch' },
-      destroy : { path : '/todos/', method : 'delete' } 
-    };
-    
-    App.saveItem = function(item, callback){
-      var data = { todo : item };
-      $.ajax({ url : this.urls.create.path,
-               type : this.urls.create.method,
-               data : data}).done(callback);
-      return this;
-    };
-
-    App.getItems = function(callback){
-      $.ajax({url : this.urls.index.path,
-              type : this.urls.index.method}).done(callback);
-      return this;      
-    };
-
-    App.updateItem = function(item, callback){
-      // NOTE: For the url, an id for the item must be added to the path
-      // -in this case the id is passed in as part of the full object, item (todo)
-      var data = { todo : {completed : item.completed } };
-      $.ajax({  url : this.urls.update.path + item.id + ".json",
-                type : this.urls.update.method,
-                data : data}).done(callback);
-    };
-
-    App.deleteItem = function(item, callback){
-      // NOTE: For the url, an id for the item must be added to the path
-      //  -and in this case, item is id. (passed in as such from removeTodo click event)
-      $.ajax({  url : this.urls.destroy.path + item + ".json",
-                type : this.urls.destroy.method,
-              }).done(callback);
-    };
-    
-    App.models = todos;
-
-    App.findModel = function(id){
-      var model;
-      $.each(this.models, function(index, item){
-          if(item.id === id){
-              console.log("found",item);
-             model = item;
-          }
+    // an alternate form of above post
+    $.post("/todos.json", {todo: newTodo}).done(function(data) {
+        console.log(data);
+        var todoHTML = HandlebarsTemplates.todo(data);
+        $("#todos").append(todoHTML);
       });
-      console.log(model);
-      return model;
-    };
+  });
 
-    App.removeModel = function(todo){
-      var index = this.models.indexOf(todo);
-      this.models.splice(index,1);
-    };
+  // Let's handle update a todo.
+  $("#todos").on("click", ".todo", function(event) {
+    console.log(event);
+    if (event.target.name === 'completed') {
+      var updatedTodo = {id: this.dataset.id};
+      updatedTodo.completed = event.target.checked;
+      console.log(updatedTodo);
 
-   
-    // Eventhandler for adding todos
-    App.doThis(function(){
-       var _this = this;
-      
-       $("#addTodo").on("submit", function(event){
-        event.preventDefault();
-        
-        var newTodo = {completed: false};
-        newTodo.title = $("#todo_title").val();
-        _this.saveItem(newTodo, function(data){
-            _this.models.push(data);
-            _this.render(data);
-         });
-        this.reset();
-      });
-    });
-
-
-    // Eventhandler for changing todos
-    App.doThis(function(){
-       var _this = this;
-      
-      // event for CLICK CHECKBOX
-      $("#todos").on("click", ".todo", function(event){
-        var id = Number(this.dataset.id);
-        if(event.target.name === "completed"){
-          var view = this;
-          var todo =  _this.findModel(id);
-          console.log(todo);
-          todo.completed = !todo.completed;
-
-          // UPDATE ITEM
-          _this.updateItem(todo, function(){
-            $(view).toggleClass("done-true");
-          });
-        }
-
-        if(event.target.id === "removeTodo"){
-          var viewDelete = this;
-          var todoDelete =  _this.findModel(id);
-          // DELETE ITEM
-          _this.deleteItem(id, function(){
-            _this.removeModel(todoDelete);
-            console.log(_this.models);
-            $(viewDelete).remove();
-          });
-        }
-      });
-    });
-
-    App.doThis(function() {
       var _this = this;
-
-      _this.getItems(function(responseData){
-        _this.models = _this.models.concat(responseData);
-        for (var i = 0; i < responseData.length; i++) {
-          _this.use('#todos', 'todo').render(responseData[i]);
-        }
+      $.ajax({
+          url: "/todos/" + updatedTodo.id + ".json",
+          method: "PATCH",
+          data: {todo: updatedTodo}
+      }).done(function(data){
+          // toggleClass turns a css class on or off
+          // (see done-true class in todos.css.scss)
+          $(_this).toggleClass("done-true");
       });
+    }
+    else if (event.target.id === "removeTodo") {
+      var deletedTodo = {id: this.dataset.id};
+      $.ajax({  url: "/todos/" + deletedTodo.id + ".json",
+                method: "DELETE"
+      }).done(function() {
+        this.remove();
+      });
+    }
+  });
+
+  // load all todos to the page
+  $.get("/todos.json").done(function(responseData) {
+    $(responseData).each(function(index, todo) {
+      var todoHTML = HandlebarsTemplates.todo(todo);
+      $("#todos").append(todoHTML);
     });
+
+    // for (var i=0, len = responseData.length; i < len; i++) {
+    //   $("").make(responseData[i]).append();
+    // }
+
+  });
 
 });
